@@ -1,7 +1,7 @@
 # LassoCut for Python
 
 Official Python client for the [LassoCut API](https://www.lassocut.com/docs/): remove the background of an
-image, frame it for a marketplace, add a cast shadow. Python 3.9 or later, no dependencies (standard library only).
+image, frame it for a marketplace, add a cast shadow. Python 3.10 or later, no dependencies (standard library only).
 
 ```sh
 pip install lassocut
