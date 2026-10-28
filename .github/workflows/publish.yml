@@ -1,0 +1,55 @@
+# Publishes lassocut to PyPI when a version tag (v1.2.3) is pushed.
+# Authentication: PyPI Trusted Publisher for this repository, this workflow and the "pypi" environment
+# (no token stored anywhere). PyPI attaches a provenance attestation built from the OIDC token.
+name: Publish
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:   # re-run a release (skipped when the version is already on PyPI)
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      exists: ${{ steps.check.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s tests
+      - name: Tag matches the package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(python -c "import re;print(re.search(r'\"(.+)\"', open('src/lassocut/_version.py').read()).group(1))")
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME does not match version $version"; exit 1; }
+      - name: Already on PyPI?
+        id: check
+        run: |
+          version=$(python -c "import re;print(re.search(r'\"(.+)\"', open('src/lassocut/_version.py').read()).group(1))")
+          code=$(curl -s -o /dev/null -w '%{http_code}' "https://pypi.org/pypi/lassocut/$version/json")
+          echo "exists=$([ "$code" = 200 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - run: python -m pip install --upgrade build twine
+      - run: python -m build
+      - run: python -m twine check --strict dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    if: needs.build.outputs.exists != 'true'
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write   # OIDC token for PyPI trusted publishing and attestations
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
